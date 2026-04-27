@@ -6,15 +6,15 @@
 
 ### 中文版（带配音）
 
-[![中文版介绍视频](docs/videos/project-memory-bootstrap-codex-intro-zh.png)](https://cdn.jsdelivr.net/gh/tianyuegithub/project-memory-bootstrap-codex@main/docs/videos/project-memory-bootstrap-codex-intro-zh.mp4)
+[![中文版介绍视频](docs/videos/project-memory-bootstrap-codex-intro-zh.png)](https://cdn.jsdelivr.net/gh/tianyuegithub/project-memory-bootstrap-codex@3b418625943a8278e64280649e1317b37a671307/docs/videos/project-memory-bootstrap-codex-intro-zh.mp4)
 
-点击封面即可播放 [中文版 MP4](https://cdn.jsdelivr.net/gh/tianyuegithub/project-memory-bootstrap-codex@main/docs/videos/project-memory-bootstrap-codex-intro-zh.mp4)，视频文件保存在本仓库。
+点击封面即可播放 [中文版 MP4](https://cdn.jsdelivr.net/gh/tianyuegithub/project-memory-bootstrap-codex@3b418625943a8278e64280649e1317b37a671307/docs/videos/project-memory-bootstrap-codex-intro-zh.mp4)，视频文件保存在本仓库。
 
 ### English with voiceover
 
-[![English intro video](docs/videos/project-memory-bootstrap-codex-intro-en.png)](https://cdn.jsdelivr.net/gh/tianyuegithub/project-memory-bootstrap-codex@main/docs/videos/project-memory-bootstrap-codex-intro-en.mp4)
+[![English intro video](docs/videos/project-memory-bootstrap-codex-intro-en.png)](https://cdn.jsdelivr.net/gh/tianyuegithub/project-memory-bootstrap-codex@3b418625943a8278e64280649e1317b37a671307/docs/videos/project-memory-bootstrap-codex-intro-en.mp4)
 
-Click the cover to play the [English MP4](https://cdn.jsdelivr.net/gh/tianyuegithub/project-memory-bootstrap-codex@main/docs/videos/project-memory-bootstrap-codex-intro-en.mp4). The video file is stored in this repository.
+Click the cover to play the [English MP4](https://cdn.jsdelivr.net/gh/tianyuegithub/project-memory-bootstrap-codex@3b418625943a8278e64280649e1317b37a671307/docs/videos/project-memory-bootstrap-codex-intro-en.mp4). The video file is stored in this repository.
 
 ## 它解决什么问题
 
