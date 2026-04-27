@@ -6,15 +6,15 @@
 
 ### 中文版
 
-<video src="https://raw.githubusercontent.com/tianyuegithub/project-memory-bootstrap-codex/main/docs/videos/project-memory-bootstrap-codex-intro-zh.mp4" controls width="100%"></video>
+[![中文版介绍视频](docs/videos/project-memory-bootstrap-codex-intro-zh.png)](docs/videos/project-memory-bootstrap-codex-intro-zh.mp4)
 
-如果 GitHub 页面没有显示播放器，可以直接打开 [中文版 MP4](docs/videos/project-memory-bootstrap-codex-intro-zh.mp4)。
+点击封面即可在 GitHub 中播放 [中文版 MP4](docs/videos/project-memory-bootstrap-codex-intro-zh.mp4)。
 
 ### English
 
-<video src="https://raw.githubusercontent.com/tianyuegithub/project-memory-bootstrap-codex/main/docs/videos/project-memory-bootstrap-codex-intro-en.mp4" controls width="100%"></video>
+[![English intro video](docs/videos/project-memory-bootstrap-codex-intro-en.png)](docs/videos/project-memory-bootstrap-codex-intro-en.mp4)
 
-If the GitHub page does not show an inline player, open the [English MP4](docs/videos/project-memory-bootstrap-codex-intro-en.mp4) directly.
+Click the cover to play the [English MP4](docs/videos/project-memory-bootstrap-codex-intro-en.mp4) on GitHub.
 
 ## 它解决什么问题
 

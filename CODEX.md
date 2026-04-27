@@ -34,7 +34,7 @@
 - `PYTHONPATH=src python3 -m project_memory_bootstrap_codex.cli init .`: 初始化当前仓库项目记忆。
 - `PYTHONPATH=src python3 -m project_memory_bootstrap_codex.cli doctor .`: 检查项目记忆完整性。
 - `PYTHONPATH=src python3 -m project_memory_bootstrap_codex.cli scan-scripts .`: 扫描关键 shell 脚本。
-- `docs/videos/project-memory-bootstrap-codex-intro-{zh,en}.mp4`: README 中嵌入的中文/英文介绍视频资产，不参与 CLI 运行。
+- `docs/videos/project-memory-bootstrap-codex-intro-{zh,en}.{mp4,png}`: README 中使用的中文/英文介绍视频与封面图，不参与 CLI 运行。
 
 ## 上下文来源优先级
 
