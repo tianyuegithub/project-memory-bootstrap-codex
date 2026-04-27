@@ -37,7 +37,7 @@
 - 失效条件: README 媒体区、视频文件路径、默认分支名或 GitHub README 渲染策略变更
 - 替代关系: none
 - 内容:
-  - README 使用两个视频封面图链接到 GitHub Raw MP4：中文版 `docs/videos/project-memory-bootstrap-codex-intro-zh.mp4` 和英文版 `docs/videos/project-memory-bootstrap-codex-intro-en.mp4`。
+  - README 使用两个视频封面图链接到 jsDelivr 播放地址，源文件保存在仓库内：中文版 `docs/videos/project-memory-bootstrap-codex-intro-zh.mp4` 和英文版 `docs/videos/project-memory-bootstrap-codex-intro-en.mp4`。
   - 中文版结尾突出 GitHub 账号 `@tianyuegithub`。
   - 视频资产用于 GitHub README 展示，不参与 Python CLI 运行链路。
 

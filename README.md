@@ -6,15 +6,15 @@
 
 ### 中文版
 
-[![中文版介绍视频](docs/videos/project-memory-bootstrap-codex-intro-zh.png)](https://raw.githubusercontent.com/tianyuegithub/project-memory-bootstrap-codex/main/docs/videos/project-memory-bootstrap-codex-intro-zh.mp4)
+[![中文版介绍视频](docs/videos/project-memory-bootstrap-codex-intro-zh.png)](https://cdn.jsdelivr.net/gh/tianyuegithub/project-memory-bootstrap-codex@main/docs/videos/project-memory-bootstrap-codex-intro-zh.mp4)
 
-点击封面即可通过 GitHub Raw 播放 [中文版 MP4](https://raw.githubusercontent.com/tianyuegithub/project-memory-bootstrap-codex/main/docs/videos/project-memory-bootstrap-codex-intro-zh.mp4)。
+点击封面即可播放 [中文版 MP4](https://cdn.jsdelivr.net/gh/tianyuegithub/project-memory-bootstrap-codex@main/docs/videos/project-memory-bootstrap-codex-intro-zh.mp4)，视频文件保存在本仓库。
 
 ### English
 
-[![English intro video](docs/videos/project-memory-bootstrap-codex-intro-en.png)](https://raw.githubusercontent.com/tianyuegithub/project-memory-bootstrap-codex/main/docs/videos/project-memory-bootstrap-codex-intro-en.mp4)
+[![English intro video](docs/videos/project-memory-bootstrap-codex-intro-en.png)](https://cdn.jsdelivr.net/gh/tianyuegithub/project-memory-bootstrap-codex@main/docs/videos/project-memory-bootstrap-codex-intro-en.mp4)
 
-Click the cover to play the [English MP4](https://raw.githubusercontent.com/tianyuegithub/project-memory-bootstrap-codex/main/docs/videos/project-memory-bootstrap-codex-intro-en.mp4) through GitHub Raw.
+Click the cover to play the [English MP4](https://cdn.jsdelivr.net/gh/tianyuegithub/project-memory-bootstrap-codex@main/docs/videos/project-memory-bootstrap-codex-intro-en.mp4). The video file is stored in this repository.
 
 ## 它解决什么问题
 
