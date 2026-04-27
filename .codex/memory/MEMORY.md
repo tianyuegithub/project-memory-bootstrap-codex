@@ -28,7 +28,7 @@
   - 本仓库提供零依赖 Python CLI、项目记忆模板、文档和可分发 Codex skill。
   - 本仓库是非官方社区项目，不替代 OpenAI 官方 Codex Memories。
 
-### README 展示层包含中英文介绍视频
+### README 展示层包含中英文带配音介绍视频
 - 类型: durable_fact
 - 范围: repo
 - 来源: `README.md`; `docs/videos/project-memory-bootstrap-codex-intro-zh.mp4`; `docs/videos/project-memory-bootstrap-codex-intro-en.mp4`; `docs/videos/project-memory-bootstrap-codex-intro-zh.png`; `docs/videos/project-memory-bootstrap-codex-intro-en.png`
@@ -38,6 +38,7 @@
 - 替代关系: none
 - 内容:
   - README 使用两个视频封面图链接到 jsDelivr 播放地址，源文件保存在仓库内：中文版 `docs/videos/project-memory-bootstrap-codex-intro-zh.mp4` 和英文版 `docs/videos/project-memory-bootstrap-codex-intro-en.mp4`。
+  - 中英文介绍视频均包含 32 秒 AAC 配音音轨，用于 GitHub README 展示。
   - 中文版结尾突出 GitHub 账号 `@tianyuegithub`。
   - 视频资产用于 GitHub README 展示，不参与 Python CLI 运行链路。
 
