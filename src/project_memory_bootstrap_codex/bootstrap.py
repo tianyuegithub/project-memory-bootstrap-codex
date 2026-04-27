@@ -82,7 +82,27 @@ def render_script_index(root: Path) -> str:
     return "\n".join(lines)
 
 
-def write_if_needed(path: Path, content: str, force: bool = False) -> WriteResult:
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        return False
+    return True
+
+
+def _ensure_safe_write_target(path: Path, root: Path) -> None:
+    root_resolved = root.resolve()
+    parent_resolved = path.parent.resolve(strict=False)
+    target_resolved = path.resolve(strict=False)
+    if not _is_relative_to(parent_resolved, root_resolved):
+        raise ValueError(f"refusing to create directories outside project root: {path.parent}")
+    if not _is_relative_to(target_resolved, root_resolved):
+        raise ValueError(f"refusing to write outside project root: {path}")
+
+
+def write_if_needed(path: Path, content: str, force: bool = False, *, root: Path | None = None) -> WriteResult:
+    if root is not None:
+        _ensure_safe_write_target(path, root)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and not force:
         return WriteResult(path=path, status="skipped")
@@ -107,21 +127,24 @@ def init_project(
             root / "CODEX.md",
             CODEX_TEMPLATE.format(project_name=project_name, script_index=script_index),
             force=force,
+            root=root,
         ),
         write_if_needed(
             root / ".codex" / "memory" / "MEMORY.md",
             MEMORY_TEMPLATE.format(today=date),
             force=force,
+            root=root,
         ),
         write_if_needed(
             root / ".codex" / "memory" / f"{date}.md",
             DAY_TEMPLATE.format(today=date),
             force=force,
+            root=root,
         ),
     ]
 
     if with_agents:
-        results.append(write_if_needed(root / "AGENTS.md", AGENTS_TEMPLATE, force=force))
+        results.append(write_if_needed(root / "AGENTS.md", AGENTS_TEMPLATE, force=force, root=root))
 
     return results
 

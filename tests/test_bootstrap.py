@@ -36,6 +36,34 @@ class BootstrapTests(unittest.TestCase):
 
             self.assertEqual(codex.read_text(encoding="utf-8"), "custom\n")
 
+    def test_init_project_rejects_symlink_escape_when_forcing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            root = base / "repo"
+            root.mkdir()
+            external = base / "outside.md"
+            external.write_text("do not overwrite\n", encoding="utf-8")
+            (root / "CODEX.md").symlink_to(external)
+
+            with self.assertRaises(ValueError):
+                init_project(root, today="2026-04-26", force=True)
+
+            self.assertEqual(external.read_text(encoding="utf-8"), "do not overwrite\n")
+
+    def test_init_project_rejects_parent_symlink_escape_before_mkdir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            root = base / "repo"
+            root.mkdir()
+            outside = base / "outside"
+            outside.mkdir()
+            (root / ".codex").symlink_to(outside, target_is_directory=True)
+
+            with self.assertRaises(ValueError):
+                init_project(root, today="2026-04-26", force=True)
+
+            self.assertFalse((outside / "memory").exists())
+
     def test_scan_shell_scripts_in_expected_locations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -32,7 +32,7 @@
 - 类型: durable_rule
 - 范围: repo
 - 来源: `AGENTS.md`; `.github/workflows/test.yml`; 本轮命令输出
-- 最近核验: 2026-04-26
+- 最近核验: 2026-04-27
 - 稳定性: high
 - 失效条件: 测试框架、CLI 模块入口、GitHub Actions 工作流或 skill 校验方式变化
 - 替代关系: none
@@ -40,3 +40,14 @@
   - 本仓库基础验证命令为 `PYTHONPATH=src python3 -m unittest discover -s tests`。
   - CLI 完整性验证命令为 `PYTHONPATH=src python3 -m project_memory_bootstrap_codex.cli doctor .`。
   - skill 结构验证使用 skill-creator 的 `quick_validate.py skills/project-memory-bootstrap-codex`。
+
+### 托管文件写入必须限制在项目根目录内
+- 类型: durable_rule
+- 范围: module:cli
+- 来源: `src/project_memory_bootstrap_codex/bootstrap.py`; `tests/test_bootstrap.py`
+- 最近核验: 2026-04-27
+- 稳定性: high
+- 失效条件: 写入函数、托管文件路径或 root 解析策略变化
+- 替代关系: none
+- 内容:
+  - CLI 在写入 `CODEX.md`、`.codex/memory/*`、`AGENTS.md` 前，必须解析写入目标和父目录，拒绝任何指向项目根目录外的 symlink 逃逸路径。
