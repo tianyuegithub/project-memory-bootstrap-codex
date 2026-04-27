@@ -19,7 +19,7 @@
 - 类型: durable_fact
 - 范围: repo
 - 来源: `README.md`; `pyproject.toml`; `skills/project-memory-bootstrap-codex/SKILL.md`
-- 最近核验: 2026-04-26
+- 最近核验: 2026-04-27
 - 稳定性: high
 - 失效条件: 包名、CLI 入口、skill 目录或项目边界发生变更
 - 替代关系: none
@@ -27,6 +27,19 @@
   - 本仓库以 `project-memory-bootstrap-codex` 为包名、CLI 命令名和 Codex skill 名。
   - 本仓库提供零依赖 Python CLI、项目记忆模板、文档和可分发 Codex skill。
   - 本仓库是非官方社区项目，不替代 OpenAI 官方 Codex Memories。
+
+### README 展示层包含中英文介绍视频
+- 类型: durable_fact
+- 范围: repo
+- 来源: `README.md`; `docs/videos/project-memory-bootstrap-codex-intro-zh.mp4`; `docs/videos/project-memory-bootstrap-codex-intro-en.mp4`
+- 最近核验: 2026-04-27
+- 稳定性: medium
+- 失效条件: README 媒体区、视频文件路径、默认分支名或 GitHub README 渲染策略变更
+- 替代关系: none
+- 内容:
+  - README 嵌入两个 MP4 视频：中文版 `docs/videos/project-memory-bootstrap-codex-intro-zh.mp4` 和英文版 `docs/videos/project-memory-bootstrap-codex-intro-en.mp4`。
+  - 中文版结尾突出 GitHub 账号 `@tianyuegithub`。
+  - 视频资产用于 GitHub README 展示，不参与 Python CLI 运行链路。
 
 ### 当前验证门禁
 - 类型: durable_rule

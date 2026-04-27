@@ -2,6 +2,20 @@
 
 非官方社区项目。它为 OpenAI Codex 增加一层“项目级可治理记忆”，用于把项目事实、运行入口、脚本知识、当天事件和长期规则沉淀在仓库内。
 
+## 视频介绍
+
+### 中文版
+
+<video src="https://raw.githubusercontent.com/tianyuegithub/project-memory-bootstrap-codex/main/docs/videos/project-memory-bootstrap-codex-intro-zh.mp4" controls width="100%"></video>
+
+如果 GitHub 页面没有显示播放器，可以直接打开 [中文版 MP4](docs/videos/project-memory-bootstrap-codex-intro-zh.mp4)。
+
+### English
+
+<video src="https://raw.githubusercontent.com/tianyuegithub/project-memory-bootstrap-codex/main/docs/videos/project-memory-bootstrap-codex-intro-en.mp4" controls width="100%"></video>
+
+If the GitHub page does not show an inline player, open the [English MP4](docs/videos/project-memory-bootstrap-codex-intro-en.mp4) directly.
+
 ## 它解决什么问题
 
 原生 Codex 已经有两类能力：
