@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Memory Bootstrap Codex"
+  short_description: "Initialize auditable project memory for Codex repositories."
+  default_prompt: "Initialize or refresh project memory for this repository using CODEX.md and .codex/memory governance."

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "project-memory-bootstrap-codex"
+version = "0.1.0"
+description = "Project-level auditable memory governance for Codex repositories."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [
+  { name = "Project Memory Bootstrap Codex Contributors" }
+]
+keywords = ["codex", "memory", "agents", "project-memory", "ai-coding"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Software Development :: Documentation",
+]
+
+[project.scripts]
+project-memory-bootstrap-codex = "project_memory_bootstrap_codex.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+project_memory_bootstrap_codex = ["py.typed"]
