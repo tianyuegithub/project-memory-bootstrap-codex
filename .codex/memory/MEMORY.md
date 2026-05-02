@@ -46,7 +46,7 @@
 - 类型: durable_rule
 - 范围: repo
 - 来源: `AGENTS.md`; `.github/workflows/test.yml`; 本轮命令输出
-- 最近核验: 2026-04-27
+- 最近核验: 2026-04-30
 - 稳定性: high
 - 失效条件: 测试框架、CLI 模块入口、GitHub Actions 工作流或 skill 校验方式变化
 - 替代关系: none
@@ -65,3 +65,33 @@
 - 替代关系: none
 - 内容:
   - CLI 在写入 `CODEX.md`、`.codex/memory/*`、`AGENTS.md` 前，必须解析写入目标和父目录，拒绝任何指向项目根目录外的 symlink 逃逸路径。
+
+### 运行时记忆读取采用本地索引优先
+- 类型: durable_fact
+- 范围: module:cli
+- 来源: `src/project_memory_bootstrap_codex/memory_index.py`; `src/project_memory_bootstrap_codex/cli.py`; `tests/test_memory_index.py`
+- 最近核验: 2026-04-30
+- 稳定性: medium
+- 失效条件: CLI 命令名、索引存储路径、记忆文件结构或搜索实现变更
+- 替代关系: complements `CODEX.md` / `.codex/memory/*` as runtime read path
+- 内容:
+  - CLI 提供 `index-memory`、`memory-status`、`search-memory`、`get-memory`、`context-memory` 五个运行时记忆读取命令。
+  - `index-memory` 默认把项目记忆与上下文文件索引到 `.codex/cache/memory-index.sqlite`，该文件是本地运行缓存，不应提交。
+  - `memory-status` 对比索引数据库与源记忆文件，报告索引缺失或过期状态。
+  - `search-memory` 只返回 ID、来源、标题、估算 tokens 和分数，用于先筛选再展开。
+  - `get-memory` 可按搜索结果 ID 精确取回单个片段。
+  - `context-memory` 可按查询或按 `--id` 生成预算受控的小上下文，命中条目仍需回读源文件或源码/脚本做回验。
+
+### 记忆整合采用 dry-run 报告优先
+- 类型: durable_fact
+- 范围: module:cli
+- 来源: `src/project_memory_bootstrap_codex/memory_consolidation.py`; `src/project_memory_bootstrap_codex/cli.py`; `tests/test_memory_consolidation.py`
+- 最近核验: 2026-05-02
+- 稳定性: medium
+- 失效条件: CLI 命令名、报告路径、safe apply 语义或自动化策略变化
+- 替代关系: complements runtime memory index
+- 内容:
+  - CLI 提供 `consolidate-memory --dry-run`、`consolidation-reports`、`consolidation-report --latest` 和 `consolidate-memory --apply --from-report latest --only <id> --safe`。
+  - dry-run 报告默认写入 `.codex/cache/memory-reports/`，该目录是本地运行缓存，不应提交。
+  - 报告项覆盖索引缺失/过期、重复候选、超过核验窗口的长期记忆、可晋升当天事件和 conflict 事件。
+  - 初版 safe apply 只自动处理本地缓存类动作，例如按报告项重建 `.codex/cache/memory-index.sqlite`；长期记忆改写、删除和冲突裁决必须人工审查。

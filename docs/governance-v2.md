@@ -61,6 +61,40 @@
 2. 判断是否满足长期晋升条件。
 3. 只有影响项目第一眼认知时，才同步更新 `CODEX.md`。
 
+## 运行时读取流程
+
+治理文件是事实来源，但运行时不应默认全文展开。推荐流程：
+
+1. 执行 `project-memory-bootstrap-codex index-memory .` 构建或刷新 `.codex/cache/memory-index.sqlite`。
+2. 用 `project-memory-bootstrap-codex memory-status .` 检查索引是否存在、是否相对源文件过期。
+3. 用 `project-memory-bootstrap-codex search-memory . "<query>"` 获取轻量结果表，只查看 ID、来源、标题和估算 token。
+4. 对明确要展开的结果，用 `project-memory-bootstrap-codex get-memory . <id>` 精确取回单个片段。
+5. 用 `project-memory-bootstrap-codex context-memory . "<query>" --max-tokens 800` 按查询生成预算受控的小上下文；也可以用 `project-memory-bootstrap-codex context-memory . --id <id> --max-tokens 800` 按 ID 生成上下文。
+6. 对端口、路径、命令、部署形态等易漂移事实，命中后仍要回读源文件或实时源码/脚本做回验。
+
+`.codex/cache/memory-index.sqlite` 是本地运行缓存，不属于项目记忆治理文件，不应提交或推送。
+
+## 记忆整合流程
+
+项目记忆变大后，推荐定期做保守整合巡检：
+
+```bash
+project-memory-bootstrap-codex memory-status .
+project-memory-bootstrap-codex index-memory .
+project-memory-bootstrap-codex consolidate-memory . --dry-run
+```
+
+`consolidate-memory --dry-run` 默认把 Markdown 与 JSON 报告写入 `.codex/cache/memory-reports/`，只报告重复、过期、冲突、可晋升当天事件和索引状态，不修改 `.codex/memory/*`。
+
+查看报告：
+
+```bash
+project-memory-bootstrap-codex consolidation-reports .
+project-memory-bootstrap-codex consolidation-report . --latest
+```
+
+执行报告项必须保守处理。初版 `--apply --safe` 只适合索引重建这类本地缓存动作；冲突裁决、删除长期记忆、覆盖用户确认口径或改写 durable memory，都必须人工审查后由 Codex 单独执行。
+
 ## 冲突规则
 
 证据冲突但未核实时，只写入当天文件，类别标记为 `conflict`，不得直接改写长期记忆。

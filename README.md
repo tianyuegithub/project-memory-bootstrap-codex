@@ -77,6 +77,60 @@ project-memory-bootstrap-codex doctor .
 project-memory-bootstrap-codex scan-scripts .
 ```
 
+构建轻量记忆索引，避免每次读取全部 Markdown：
+
+```bash
+project-memory-bootstrap-codex index-memory .
+```
+
+检查索引是否存在、是否相对源文件过期：
+
+```bash
+project-memory-bootstrap-codex memory-status .
+```
+
+先查索引，只返回 ID、来源、标题和估算 token：
+
+```bash
+project-memory-bootstrap-codex search-memory . "启动端口"
+```
+
+按搜索结果 ID 精确取回单个片段：
+
+```bash
+project-memory-bootstrap-codex get-memory . <id>
+```
+
+按查询生成小上下文，默认控制在约 1000 tokens：
+
+```bash
+project-memory-bootstrap-codex context-memory . "启动端口" --max-tokens 800
+```
+
+也可以跳过二次搜索，直接按 ID 生成小上下文：
+
+```bash
+project-memory-bootstrap-codex context-memory . --id <id> --max-tokens 800
+```
+
+生成记忆整合 dry-run 报告，不修改项目记忆文件：
+
+```bash
+project-memory-bootstrap-codex consolidate-memory . --dry-run
+```
+
+查看最新整合报告：
+
+```bash
+project-memory-bootstrap-codex consolidation-report . --latest
+```
+
+只应用报告中明确标记为安全的项目，例如重建本地索引：
+
+```bash
+project-memory-bootstrap-codex consolidate-memory . --apply --from-report latest --only I001 --safe
+```
+
 ## Codex skill
 
 仓库内包含一个可安装的 Codex skill：
@@ -104,12 +158,16 @@ project-memory-bootstrap-codex/
 2. 仓库内可审计：项目事实跟随仓库，而不是只留在聊天上下文。
 3. 证据优先：没有源码、配置、脚本、测试或用户确认，不晋升为长期记忆。
 4. 分层治理：`CODEX.md` 放摘要，`MEMORY.md` 放长期细节，当天文件放事件。
-5. 不盲目覆盖：CLI 默认不覆盖已有文件。
+5. 索引优先：运行时先用 SQLite 索引检索记忆片段，再按需按 ID 取回或读取来源文件。
+6. 保守整合：自动化默认只生成 `.codex/cache/memory-reports/*` dry-run 报告，长期记忆改写需要人工审查。
+7. 不盲目覆盖：CLI 默认不覆盖已有文件。
 
 ## 安全说明
 
 - CLI 只扫描 shell 脚本路径，不执行脚本。
 - CLI 不访问网络，不读取密钥管理器，不上传项目内容。
+- 记忆索引默认写入 `.codex/cache/memory-index.sqlite`，属于本地运行缓存，不应纳入提交。
+- 记忆整合报告默认写入 `.codex/cache/memory-reports/`，属于本地运行缓存；`--dry-run` 不修改 `.codex/memory/*`。
 - `--force` 只在写入目标解析后仍位于项目根目录内时才覆盖托管文件，避免符号链接把写入导向仓库外。
 - 开源或提交项目前，仍应人工审查 `.codex/memory/*`，避免把原项目内部摘要、客户信息或密钥片段写入仓库。
 
