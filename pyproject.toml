@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "project-memory-bootstrap-codex"
-version = "0.1.0"
+version = "0.2.0.dev0"
 description = "Project-level auditable memory governance for Codex repositories."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -25,8 +25,12 @@ classifiers = [
 [project.scripts]
 project-memory-bootstrap-codex = "project_memory_bootstrap_codex.cli:main"
 
+[project.optional-dependencies]
+mcp = ["mcp>=1.26.0,<2", "PyYAML>=6.0.3,<7"]
+native-notes = ["PyYAML>=6.0.3,<7"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-project_memory_bootstrap_codex = ["py.typed"]
+project_memory_bootstrap_codex = ["py.typed", "resources/*.md", "resources/*.js"]

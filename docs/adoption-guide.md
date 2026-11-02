@@ -1,78 +1,17 @@
-# 采用指南
+# 接入指南
 
-## 最小接入
+当前程序入口与命令以[README](../README.md)和[唯一共享协议](../src/project_memory_bootstrap_codex/resources/shared-memory-protocol.md)为准。
 
-在项目根目录执行：
+先初始化缺失的入口，再明确登记项目/成员仓和维护范围。登记过的共享库需保留匹配的持久状态；仅复制Markdown不能证明遗忘保护和处理进度完整。
 
-```bash
-project-memory-bootstrap-codex init . --with-agents
-```
+按需查询，重要的新知识由掌握直接证据的任务代理提交。保留各工具原生记忆作为各自管理的来源，不双向覆盖生成文件；工具的规则加载、查询、候选持久化与对端读取应分别实测。
 
-然后提交这些文件：
+未登记旧项目的legacy检查是显式操作；已登记项目使用新协议，不直接调用旧清理器或复制自动化TOML绕过宿主调度入口。未完成真实接入的工具标为未验证。
 
-```text
-AGENTS.md
-CODEX.md
-.codex/memory/MEMORY.md
-.codex/memory/YYYY-MM-DD.md
-```
+## 将机制设为所有开发项目的默认选择
 
-## 团队推荐接入
+这是用户级选择，应同时写入Codex、Claude Code、ZCode的全局入口。推荐规则：进入用户实际开展开发的工作区时先project-context；已登记复用，明确停用保持停用；未登记且项目根明确时init并register-project（启用维护），向已有AGENTS补短路由，Claude用薄导入。Git worktree复用主工作区，独立项目各自保存知识，不把所有项目合到一个库。
 
-1. 在团队模板仓库中加入 `AGENTS.md` 和 `CODEX.md`。
-2. 要求每次进入项目先读取 `CODEX.md` 和 `.codex/memory/*`。
-3. 把“今天发生了什么”先写入当天文件。
-4. 只有核验过且可复用的事实才晋升到长期记忆。
-5. 在 PR review 中检查项目记忆是否需要同步更新。
+`init`只补缺失文件，不自动改写已有项目规则；补齐既有入口由设置代理在用户授权内完成。状态缺失或身份歧义不能通过新建空账本绕过。全局默认不触发整机扫描、历史批量回填或每项目付费定时任务；普通任务通过协议维护，独立调度另按用户要求启用。
 
-## 低 token 运行方式
-
-如果项目记忆变大，不要继续默认读取全部 `.codex/memory/*`。推荐改成：
-
-```bash
-project-memory-bootstrap-codex index-memory .
-project-memory-bootstrap-codex memory-status .
-project-memory-bootstrap-codex search-memory . "你当前任务的关键词"
-project-memory-bootstrap-codex get-memory . <id>
-project-memory-bootstrap-codex context-memory . "你当前任务的关键词" --max-tokens 800
-project-memory-bootstrap-codex context-memory . --id <id> --max-tokens 800
-```
-
-把 `search-memory` 的结果当成索引，只在需要时用 `get-memory` 按 ID 展开单条，或按来源文件回读。`context-memory` 的输出适合作为本轮任务提示的一小段背景，但不能替代实时源码、配置、脚本和测试证据。
-
-## 自动记忆整合
-
-长期使用后，可以把记忆整合接入 Codex 定时自动化。推荐自动化只做 dry-run：
-
-```bash
-project-memory-bootstrap-codex memory-status .
-project-memory-bootstrap-codex index-memory .
-project-memory-bootstrap-codex consolidate-memory . --dry-run
-```
-
-报告默认写入 `.codex/cache/memory-reports/`，不会修改项目记忆。人工审查报告后，再选择性应用明确安全的项：
-
-```bash
-project-memory-bootstrap-codex consolidation-report . --latest
-project-memory-bootstrap-codex consolidate-memory . --apply --from-report latest --only I001 --safe
-```
-
-## 不建议的用法
-
-- 不要把 `CODEX.md` 写成详细设计文档。
-- 不要把聊天记录原样复制进长期记忆。
-- 不要在运行时默认把所有记忆文件塞进上下文。
-- 不要用项目记忆替代真实测试。
-- 不要把密钥、token、账号密码写入记忆文件。
-- 不要提交 `.codex/cache/memory-index.sqlite` 或 `.codex/cache/memory-reports/`。
-- 不要让定时自动化直接删除、覆盖或裁决长期记忆。
-- 不要在证据冲突时直接覆盖长期条目。
-
-## 开源分发建议
-
-如果你要把机制推广给其它 Codex 用户，建议按以下层级介绍：
-
-1. 原生 Codex 有 `AGENTS.md` 和 Memories。
-2. 原生缺少严格的项目级记忆治理。
-3. 本项目提供仓库内、可审计、可核验的项目记忆层。
-4. 这套机制适合多仓库、长期维护、多人协作、客户交付和生产排障场景。
+全局规则、项目入口和生命周期回调负责让代理发现协议；统一CLI/MCP负责写入校验、版本与抑制。它们不能保证任意模型永远遵守指令，也不能强制未接入工具不直接编辑文件。需要分别验证实际规则加载、共享读取及发布；回调成功只代表登记活动，不代表语义维护完成。

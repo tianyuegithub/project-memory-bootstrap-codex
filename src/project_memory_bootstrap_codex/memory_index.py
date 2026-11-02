@@ -17,6 +17,9 @@ from pathlib import Path
 from typing import Iterable
 
 from .bootstrap import find_project_root
+from .errors import MemoryProtocolError
+from .facts import START, parse_facts
+from .memory_state import published_document
 
 DEFAULT_DB_RELATIVE_PATH = Path(".codex") / "cache" / "memory-index.sqlite"
 DEFAULT_MAX_CHARS = 2400
@@ -33,8 +36,11 @@ EXCLUDED_DIRS = {
     "build",
     "__pycache__",
 }
+RUNTIME_CONTEXT_DIRS = {".runtime", ".worktrees"}
 
-MANAGED_CONTEXT_FILES = {"CODEX.md", "AGENTS.md", "CLAUDE.md", "CURSOR.md"}
+ACTIVE_CONTEXT_FILES = {"README.md", "AGENTS.md"}
+LEGACY_CONTEXT_FILES = {"CODEX.md", "CLAUDE.md", "CURSOR.md"}
+LEGACY_KINDS = {"agent_legacy", "legacy_memory", "legacy_manual"}
 
 
 @dataclass(frozen=True)
@@ -90,10 +96,14 @@ def estimate_tokens(text: str) -> int:
     return max(1, (len(text) + TOKEN_CHARS - 1) // TOKEN_CHARS)
 
 
-def is_excluded(path: Path, root: Path) -> bool:
+def is_excluded(path: Path, root: Path, *, include_runtime: bool = False) -> bool:
     try:
         rel_parts = path.relative_to(root).parts
     except ValueError:
+        return True
+    if len(rel_parts) >= 2 and rel_parts[0] == ".codex" and rel_parts[1] == "cache":
+        return True
+    if not include_runtime and any(part in RUNTIME_CONTEXT_DIRS for part in rel_parts):
         return True
     return any(part in EXCLUDED_DIRS for part in rel_parts)
 
@@ -107,8 +117,10 @@ def classify_memory_file(path: Path, root: Path) -> str | None:
     rel_posix = rel.as_posix()
     name = path.name
 
-    if name == "CODEX.md":
+    if name == "README.md" and path.parent == root:
         return "project_manual"
+    if name == "CODEX.md":
+        return "legacy_manual"
     if name == "AGENTS.md":
         return "agent_instructions"
     if name in {"CLAUDE.md", "CURSOR.md"}:
@@ -124,10 +136,17 @@ def classify_memory_file(path: Path, root: Path) -> str | None:
     return None
 
 
-def discover_memory_files(root: Path, *, include_legacy: bool = True) -> list[Path]:
+def discover_memory_files(root: Path, *, include_legacy: bool = True, include_runtime: bool = False, governed: bool = False) -> list[Path]:
+    if governed:
+        source = root / ".codex/memory/MEMORY.md"
+        return [source] if source.is_file() else []
     files: list[Path] = []
 
-    for name in MANAGED_CONTEXT_FILES:
+    managed_context_files = set(ACTIVE_CONTEXT_FILES)
+    if include_legacy:
+        managed_context_files.update(LEGACY_CONTEXT_FILES)
+
+    for name in managed_context_files:
         candidate = root / name
         if candidate.is_file():
             files.append(candidate)
@@ -138,7 +157,7 @@ def discover_memory_files(root: Path, *, include_legacy: bool = True) -> list[Pa
 
     if include_legacy:
         for path in root.rglob("*.md"):
-            if is_excluded(path, root):
+            if is_excluded(path, root, include_runtime=include_runtime):
                 continue
             kind = classify_memory_file(path, root)
             if kind == "legacy_memory":
@@ -201,9 +220,9 @@ def split_large_section(title: str, text: str, *, max_chars: int) -> list[tuple[
     return chunks
 
 
-def load_chunks(root: Path, *, include_legacy: bool = True) -> list[MemoryChunk]:
+def load_chunks(root: Path, *, include_legacy: bool = True, include_runtime: bool = False, governed: bool = False) -> list[MemoryChunk]:
     chunks: list[MemoryChunk] = []
-    for path in discover_memory_files(root, include_legacy=include_legacy):
+    for path in discover_memory_files(root, include_legacy=include_legacy, include_runtime=include_runtime, governed=governed):
         kind = classify_memory_file(path, root)
         if kind is None:
             continue
@@ -211,6 +230,15 @@ def load_chunks(root: Path, *, include_legacy: bool = True) -> list[MemoryChunk]
         text = path.read_text(encoding="utf-8", errors="replace")
         mtime = path.stat().st_mtime
         content_hash = hashlib.sha1(text.encode("utf-8", errors="replace")).hexdigest()
+        if governed:
+            for fact in parse_facts(text):
+                if fact.metadata["status"] == "forgotten":
+                    continue
+                chunks.append(MemoryChunk(fact.fact_id, rel, "fact:" + fact.metadata["status"], fact.title,
+                                          fact.raw, estimate_tokens(fact.raw), mtime, content_hash))
+            continue
+        if START in text:
+            raise MemoryProtocolError("PROJECT_UNREGISTERED", "Managed facts require their registered project and persistent state.")
         for title, chunk_text in split_markdown(text):
             raw_id = f"{rel}\0{title}\0{chunk_text}".encode("utf-8")
             chunk_id = hashlib.sha1(raw_id).hexdigest()[:12]
@@ -236,15 +264,28 @@ def connect(db_path: Path) -> sqlite3.Connection:
     return connection
 
 
-def rebuild_index(path: Path, *, db_path: Path | None = None, include_legacy: bool = True) -> IndexResult:
+def _rebuild_index(
+    path: Path,
+    *,
+    db_path: Path | None = None,
+    include_legacy: bool = True,
+    include_runtime: bool = False,
+    governed: bool = False,
+) -> IndexResult:
     root = find_project_root(path)
     target_db = db_path or default_db_path(root)
-    chunks = load_chunks(root, include_legacy=include_legacy)
-    files = {chunk.path for chunk in chunks}
+    chunks = load_chunks(root, include_legacy=include_legacy, include_runtime=include_runtime, governed=governed)
+    sources = discover_memory_files(root, include_legacy=include_legacy, include_runtime=include_runtime, governed=governed)
+    files = {source.relative_to(root).as_posix() for source in sources}
 
     with connect(target_db) as connection:
         connection.executescript(
             """
+            BEGIN IMMEDIATE;
+            DROP TABLE IF EXISTS memory_sources;
+            CREATE TABLE memory_sources (path TEXT PRIMARY KEY, kind TEXT NOT NULL, mtime REAL NOT NULL, content_hash TEXT NOT NULL);
+            DROP TABLE IF EXISTS memory_index_meta;
+            CREATE TABLE memory_index_meta (root TEXT NOT NULL, governed INTEGER NOT NULL);
             DROP TABLE IF EXISTS memory_chunks;
             CREATE TABLE memory_chunks (
                 id TEXT PRIMARY KEY,
@@ -261,6 +302,11 @@ def rebuild_index(path: Path, *, db_path: Path | None = None, include_legacy: bo
             CREATE INDEX idx_memory_chunks_kind ON memory_chunks(kind);
             """
         )
+        connection.execute("INSERT INTO memory_index_meta VALUES (?,?)", (str(root), int(governed)))
+        connection.executemany("INSERT INTO memory_sources VALUES (?,?,?,?)", [
+            (source.relative_to(root).as_posix(), classify_memory_file(source, root) or "unknown", *_source_fingerprint(source))
+            for source in sources
+        ])
         connection.executemany(
             """
             INSERT INTO memory_chunks (id, path, kind, title, text, tokens, mtime, content_hash, indexed_at)
@@ -302,6 +348,16 @@ def _score_chunk(row: sqlite3.Row, terms: Iterable[str]) -> int:
     path = str(row["path"]).lower()
     kind = str(row["kind"]).lower()
     text = str(row["text"]).lower()
+    if kind.startswith("fact:"):
+        fact = parse_facts(str(row["text"]))[0]
+        meta = fact.metadata
+        text = "\n".join([
+            fact.fact_id, fact.body, *meta["scope"], meta["verification"],
+            meta["expires_when"], *meta.get("supersedes", []),
+            *(source["locator"] for source in meta["sources"]),
+        ]).lower()
+        # Fact retrieval matches semantic content and source locations, not raw JSON/hash metadata.
+        path = kind = ""
     score = 0
     for term in terms:
         if not term:
@@ -318,66 +374,128 @@ def _score_chunk(row: sqlite3.Row, terms: Iterable[str]) -> int:
     return score
 
 
-def ensure_index(root: Path, db_path: Path) -> None:
-    if db_path.exists():
+def ensure_index(root: Path, db_path: Path, *, include_legacy: bool = False, governed: bool = False) -> None:
+    if _index_status(root, db_path=db_path, include_legacy=include_legacy, governed=governed).is_current:
         return
-    rebuild_index(root, db_path=db_path)
+    _rebuild_index(root, db_path=db_path, include_legacy=include_legacy, governed=governed)
 
 
 def _row_to_search_result(row: sqlite3.Row, *, score: int = 0) -> SearchResult:
+    text = str(row["text"])
+    tokens = int(row["tokens"])
+    if str(row["kind"]).startswith("fact:"):
+        fact = parse_facts(text)[0]
+        meta = fact.metadata
+        text = "\n".join([
+            f"## {fact.fact_id}：{fact.title}",
+            f"- status: {meta['status']}",
+            f"- revision: {meta['revision']}",
+            f"- scope: {', '.join(meta['scope'])}",
+            f"- verified_at: {meta['verified_at']}",
+            "", fact.body, "",
+            f"- verification: {meta['verification']}",
+            f"- expires_when: {meta['expires_when']}",
+            f"- supersedes: {', '.join(meta.get('supersedes', [])) or '无'}",
+            f"- 证据条数: {len(meta['sources'])}；完整来源/版本用inspect-memory或memory_inspect",
+        ])
+        tokens = estimate_tokens(text)
     return SearchResult(
         id=str(row["id"]),
         path=str(row["path"]),
         kind=str(row["kind"]),
         title=str(row["title"]),
-        tokens=int(row["tokens"]),
+        tokens=tokens,
         score=score,
-        text=str(row["text"]),
+        text=text,
     )
 
 
+def _selected_rows(path: Path, db_path: Path | None, include_legacy: bool, history: bool) -> list[sqlite3.Row]:
+    with published_document(path) as (context, _, suppressed, _):
+        root = context.root if context else find_project_root(path)
+        target_db = _target_database(root, db_path, context is not None)
+        if context and include_legacy:
+            raise MemoryProtocolError("LEGACY_REVIEW_REQUIRED", "Unstructured legacy text is a recovery source, not governed recall.")
+        ensure_index(root, target_db, include_legacy=include_legacy, governed=context is not None)
+        with connect(target_db) as connection:
+            where = "" if include_legacy else _non_legacy_where_clause()
+            rows = connection.execute(f"SELECT id,path,kind,title,text,tokens FROM memory_chunks {where}").fetchall()
+        if context:
+            visible = {"fact:active", "fact:needs_review", "fact:conflict"}
+            rows = [r for r in rows if r["id"] not in suppressed and (history or r["kind"] in visible)]
+        return rows
+
+
 def search_memory(
-    path: Path,
-    query: str,
-    *,
-    db_path: Path | None = None,
-    limit: int = 10,
+    path: Path, query: str, *, db_path: Path | None = None, limit: int = 10,
+    include_legacy: bool = False, history: bool = False,
 ) -> list[SearchResult]:
-    root = find_project_root(path)
-    target_db = db_path or default_db_path(root)
-    ensure_index(root, target_db)
+    rows = _selected_rows(path, db_path, include_legacy, history)
     terms = _normalize_query(query)
-
-    with connect(target_db) as connection:
-        rows = connection.execute(
-            "SELECT id, path, kind, title, text, tokens FROM memory_chunks"
-        ).fetchall()
-
-    scored: list[SearchResult] = []
-    for row in rows:
-        score = _score_chunk(row, terms)
-        if score <= 0:
-            continue
-        scored.append(_row_to_search_result(row, score=score))
-
+    scored = [_row_to_search_result(row, score=score) for row in rows if (score := _score_chunk(row, terms)) > 0]
     scored.sort(key=lambda item: (-item.score, item.tokens, item.path, item.title))
     return scored[:limit]
 
 
-def get_memory_by_id(path: Path, chunk_id: str, *, db_path: Path | None = None) -> SearchResult | None:
-    root = find_project_root(path)
-    target_db = db_path or default_db_path(root)
-    ensure_index(root, target_db)
+def get_memory_by_id(
+    path: Path, chunk_id: str, *, db_path: Path | None = None,
+    include_legacy: bool = False, history: bool = False,
+) -> SearchResult | None:
+    rows = _selected_rows(path, db_path, include_legacy, True)
+    row = _resolve_row(rows, chunk_id, history)
+    return _row_to_search_result(row) if row is not None else None
 
-    with connect(target_db) as connection:
-        row = connection.execute(
-            "SELECT id, path, kind, title, text, tokens FROM memory_chunks WHERE id = ?",
-            (chunk_id,),
-        ).fetchone()
 
-    if row is None:
+def _resolve_row(rows: list[sqlite3.Row], chunk_id: str, history: bool) -> sqlite3.Row | None:
+    by_id = {row["id"]: row for row in rows}
+    row = by_id.get(chunk_id)
+    if row is None or history or not row["kind"].startswith("fact:"):
+        return row
+    if row["kind"] in {"fact:active", "fact:needs_review", "fact:conflict"}:
+        return row
+    if row["kind"] != "fact:superseded":
         return None
-    return _row_to_search_result(row)
+    facts = {r["id"]: parse_facts(r["text"])[0] for r in rows if r["kind"].startswith("fact:")}
+    waiting, seen, successors = [chunk_id], set(), set()
+    while waiting:
+        current = waiting.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        for fact_id, fact in facts.items():
+            if current not in fact.metadata.get("supersedes", []):
+                continue
+            if fact.metadata["status"] in {"active", "needs_review", "conflict"}:
+                successors.add(fact_id)
+            elif fact.metadata["status"] == "superseded":
+                waiting.append(fact_id)
+    if len(successors) > 1:
+        raise MemoryProtocolError("SUCCESSOR_AMBIGUOUS", "Several current facts replace this fact; query the topic explicitly.")
+    return by_id[next(iter(successors))] if successors else None
+
+
+def _target_database(root: Path, db_path: Path | None, governed: bool) -> Path:
+    target = (db_path or default_db_path(root)).resolve()
+    cache = (root / ".codex/cache").resolve()
+    if governed and (root not in cache.parents or (target != cache and cache not in target.parents)):
+        raise MemoryProtocolError("INDEX_OUTSIDE_CACHE", "Governed indexes must remain in the project's cache directory.")
+    return target
+
+
+def rebuild_index(path: Path, *, db_path: Path | None = None, include_legacy: bool = False, include_runtime: bool = False) -> IndexResult:
+    with published_document(path) as (context, _, _, _):
+        root = context.root if context else find_project_root(path)
+        if context and include_legacy:
+            raise MemoryProtocolError("LEGACY_REVIEW_REQUIRED", "Governed indexes contain published facts, not unstructured legacy text.")
+        target = _target_database(root, db_path, context is not None)
+        return _rebuild_index(root, db_path=target, include_legacy=include_legacy, include_runtime=include_runtime, governed=context is not None)
+
+
+def index_status(path: Path, *, db_path: Path | None = None, include_legacy: bool = False, include_runtime: bool = False) -> IndexStatus:
+    with published_document(path) as (context, _, _, _):
+        root = context.root if context else find_project_root(path)
+        target = _target_database(root, db_path, context is not None)
+        return _index_status(root, db_path=target, include_legacy=include_legacy, include_runtime=include_runtime, governed=context is not None)
 
 
 def _source_fingerprint(path: Path) -> tuple[float, str]:
@@ -385,10 +503,17 @@ def _source_fingerprint(path: Path) -> tuple[float, str]:
     return path.stat().st_mtime, hashlib.sha1(text.encode("utf-8", errors="replace")).hexdigest()
 
 
-def index_status(path: Path, *, db_path: Path | None = None, include_legacy: bool = True) -> IndexStatus:
+def _index_status(
+    path: Path,
+    *,
+    db_path: Path | None = None,
+    include_legacy: bool = True,
+    include_runtime: bool = False,
+    governed: bool = False,
+) -> IndexStatus:
     root = find_project_root(path)
     target_db = db_path or default_db_path(root)
-    source_files = discover_memory_files(root, include_legacy=include_legacy)
+    source_files = discover_memory_files(root, include_legacy=include_legacy, include_runtime=include_runtime, governed=governed)
 
     if not target_db.exists():
         return IndexStatus(
@@ -402,14 +527,12 @@ def index_status(path: Path, *, db_path: Path | None = None, include_legacy: boo
 
     try:
         with connect(target_db) as connection:
-            rows = connection.execute(
-                """
-                SELECT path, MAX(mtime) AS mtime, MAX(content_hash) AS content_hash, COUNT(*) AS chunks
-                FROM memory_chunks
-                GROUP BY path
-                """
-            ).fetchall()
-            chunk_count = int(connection.execute("SELECT COUNT(*) FROM memory_chunks").fetchone()[0])
+            where = "" if include_legacy else _non_legacy_where_clause()
+            policy = connection.execute("SELECT root,governed FROM memory_index_meta").fetchone()
+            if policy is None or policy["root"] != str(root) or bool(policy["governed"]) != governed:
+                return IndexStatus(root, target_db, 0, len(source_files), tuple(str(x.relative_to(root)) for x in source_files), True)
+            rows = connection.execute(f"SELECT path,mtime,content_hash FROM memory_sources {where}").fetchall()
+            chunk_count = int(connection.execute(f"SELECT COUNT(*) FROM memory_chunks {where}").fetchone()[0])
     except sqlite3.Error:
         return IndexStatus(
             root=root,
@@ -450,18 +573,28 @@ def index_status(path: Path, *, db_path: Path | None = None, include_legacy: boo
     )
 
 
+def _non_legacy_where_clause() -> str:
+    quoted = ", ".join(f"'{kind}'" for kind in sorted(LEGACY_KINDS))
+    return f"WHERE kind NOT IN ({quoted})"
+
+
 def context_from_ids(
     path: Path,
     chunk_ids: Iterable[str],
     *,
     db_path: Path | None = None,
     max_tokens: int = 1000,
+    include_legacy: bool = False,
+    history: bool = False,
 ) -> str:
     results: list[SearchResult] = []
+    rows = _selected_rows(path, db_path, include_legacy, True)
+    seen: set[str] = set()
     for chunk_id in chunk_ids:
-        result = get_memory_by_id(path, chunk_id, db_path=db_path)
-        if result is not None:
-            results.append(result)
+        row = _resolve_row(rows, chunk_id, history)
+        if row is not None and row["id"] not in seen:
+            results.append(_row_to_search_result(row))
+            seen.add(row["id"])
     if not results:
         return "No indexed memory matched the requested IDs."
     return context_from_results(results, max_tokens=max_tokens)
@@ -488,14 +621,13 @@ def context_from_results(results: list[SearchResult], *, max_tokens: int = 1000)
         if used and used + block_tokens > budget:
             break
         if block_tokens > budget and not used:
-            allowed_chars = max(320, budget * TOKEN_CHARS - len(header) - 32)
-            block = f"{header}\n{snippet[:allowed_chars].rstrip()}..."
+            block = f"{header}\n[完整条目超出本次预算；请使用 get-memory 按该 ID 展开，未截断事实正文。]"
             block_tokens = estimate_tokens(block)
         lines.append(block)
         lines.append("")
         used += block_tokens
 
-    lines.append(f"_Approx read tokens: {used} / {budget}_")
+    lines.append(f"_Approx read tokens: {used} / {budget} (4 characters/unit; not measured model tokens)_")
     return "\n".join(lines).rstrip()
 
 

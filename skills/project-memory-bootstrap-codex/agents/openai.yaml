@@ -1,4 +1,4 @@
 interface:
   display_name: "Project Memory Bootstrap Codex"
-  short_description: "Initialize auditable project memory for Codex repositories."
-  default_prompt: "Initialize or refresh project memory for this repository using CODEX.md and .codex/memory governance."
+  short_description: "Read and maintain evidence-backed shared project memory."
+  default_prompt: "Use $project-memory-bootstrap-codex to read or maintain this project's shared memory within the current task's authorized scope."

@@ -1,103 +1,60 @@
-"""Text templates used by the project memory bootstrap CLI."""
+"""Executable owner of initialization templates; templates/ holds distribution copies."""
 
 from __future__ import annotations
 
+README_TEMPLATE = """# {project_name}
+
+本文件是项目地图，以下导航均待基于当前源码、配置和正式文档核验。
+
+- 项目定位与模块职责：待核验。
+- 构建、测试和运行入口：待核验。
+- 正式文档与领域合同：待核验。
+- 项目协作指令入口：`AGENTS.md`。
+- 共享记忆协议：`project-memory-bootstrap-codex protocol`（随程序提供的唯一协议正文）。
+"""
+
 CODEX_TEMPLATE = """# CODEX.md
 
-## 项目定位
-
-`{project_name}` 的项目定位待补充。请基于实时源码、配置、脚本、测试和用户确认进行更新。
-
-## 模块结构
-
-- 待补充：核心模块、目录职责、边界。
-
-## 关键链路
-
-- 待补充：主要业务链路、入口、数据流、关键依赖。
-
-## 运行入口与端口
-
-- 待补充：启动命令、服务端口、健康检查、依赖服务。
-
-## 脚本索引
-
-{script_index}
-
-## 上下文来源优先级
-
-1. 用户明确确认
-2. 实时源码、配置、脚本、测试
-3. 项目 `CODEX.md`
-4. 项目 `.codex/memory/MEMORY.md`
-5. 项目 `.codex/memory/YYYY-MM-DD.md`
-6. 仓库内其它 `README*`、`docs/*`、agent 文件
-7. legacy memory
-8. 全局 `~/.codex/memories/*`
-9. 推断
-
-## 记忆治理规则
-
-- `CODEX.md` 只保留项目第一眼事实与索引。
-- `.codex/memory/MEMORY.md` 只保留已核验、可跨任务复用、3 天后仍大概率成立的长期事实。
-- `.codex/memory/YYYY-MM-DD.md` 记录当天事件、验证、决策、迁移、冲突和待回验。
-- 长期条目必须包含类型、范围、来源、最近核验、稳定性、失效条件、替代关系。
-- 证据冲突但未核实时，只写当天文件，类别标记为 `conflict`。
-- 当前任务命中已有长期条目时，刷新 `最近核验`。
+此文件仅为旧版分发占位，不是项目指令入口，初始化器不再创建此文件。
+项目指令由 `AGENTS.md` 拥有，项目地图由 `README.md` 拥有。
+共享记忆协议见 `project-memory-bootstrap-codex protocol`。
 """
 
 AGENTS_TEMPLATE = """# AGENTS.md
 
 请使用中文进行交互，保持专业、简洁、准确、完整。
 
-## 项目记忆初始化协议
+## 项目入口与按需检索
 
-每次进入本项目或切换到不熟悉的仓库时，先执行项目记忆初始化：
+- 本文件是唯一项目指令入口；`README.md` 拥有项目地图与导航。
+- 启动时按任务需要读取项目地图和对应正式文档，不全量初始化或加载记忆库，不因缺少日期文件补造日记。
+- 需要历史线索时按需使用 `search-memory` / `get-memory` / `context-memory`，只展开相关事实及其适用条件。
+- 用户当前要求、实时源码与有效正式合同优先；读取记忆或摘要不等于重新核验，来源变化时回看对应 owner。
 
-1. 定位项目根目录。若存在 Git 仓库，优先使用 Git 根目录，否则使用当前工作目录。
-2. 优先读取根目录 `CODEX.md`。若不存在，读取 `AGENTS.md`、`CLAUDE.md`、`CURSOR.md`、`README*`、`docs/*` 和构建文件，并创建 `CODEX.md`。
-3. 通用发现已有记忆和 agent 遗留文件，重点关注 `.codex/memory/*`、`**/MEMORY.md`、`**/memory/*.md`、`.workbuddy/*`、`.claude/*`、`.cursor/*`。
-4. 长期稳定事实写入 `.codex/memory/MEMORY.md`，当天事项写入 `.codex/memory/YYYY-MM-DD.md`，保留原始文件。
-5. 识别关键 `*.sh` 脚本，覆盖根目录以及 `scripts/`、`bin/`、`tools/`、`deploy/`。
-6. 完成任务后，如新增稳定项目事实、约束、脚本认知或运行规则，同步更新 `CODEX.md` 与 `.codex/memory/*`。
+## 共享记忆边界
 
-## 记忆治理规则
-
-- 来源优先级：用户明确确认 > 实时源码/配置/脚本/测试 > 项目 `CODEX.md` > 项目 `.codex/memory/MEMORY.md` > 项目 `.codex/memory/YYYY-MM-DD.md` > 仓库内其它文档和 agent 文件 > legacy memory > 全局 `~/.codex/memories/*` > 推断。
-- 写入流程：先写当天文件，再判断是否满足长期晋升条件，只有影响“项目第一眼认知”时才同步改 `CODEX.md`。
-- 长期晋升条件：本轮已核验、可跨任务复用、3 天后仍大概率成立。
-- 冲突规则：证据冲突但未核实时，只写入当天文件，类别标记为 `conflict`。
-- 去重规则：`CODEX.md` 只放摘要与索引，细节型长期知识只常驻 `MEMORY.md`。
+- 进入项目先执行 `project-memory-bootstrap-codex project-context .` 和 `protocol --brief`；已有注入身份可复用。未登记是否自动启用由用户的全局默认授权决定，软件不替所有安装者默认扩大范围。
+- 任务取得重要新证据后经 `capture-memory → propose-memory → commit-memory` 发布；结束前判断有无值得记忆的变化，没有就不造日记。原生笔记只保存共享根、fact_id与读取入口，不复制事实正文。
+- 共享记忆协议：`project-memory-bootstrap-codex protocol`。按该协议核对项目身份、来源、事实版本、核验范围和状态。
+- `.codex/memory/MEMORY.md` 是受管事实正文；通过受控提案与提交维护，不直接编辑受管块，不自动晋升未核验材料。
+- 人工修订受管正文前先停止自动写入，再由协议程序采纳修订。旧日期文件保留作历史线索，不按年龄自动判无效或自动清理。
+- 候选捕获、语义核验与提交分别记录；初始化不代表业务事实已核验，也不代表已启用持续维护。
+- `.codex/cache/`、`.codex/memory-state/` 与 `.state/` 为本机状态，不提交 Git；凭证不得进入记忆正文或日志。
+- 记忆只提供任务线索，不扩大业务修改、发布、跨项目读取或数据删除授权。
 """
 
-MEMORY_TEMPLATE = """# Project Long-Term Memory
+MEMORY_TEMPLATE = """# 项目共享记忆
 
-本文件只记录已核验、可跨任务复用、3 天后仍大概率成立的项目级长期事实。
+当前没有受管事实。初始化只建立文件，不证明业务事实、项目身份注册或持续维护已经完成。
 
-## 条目模板
-
-### 示例：项目记忆治理已启用
-- 类型: durable_rule
-- 范围: repo
-- 来源: `CODEX.md`; `.codex/memory/MEMORY.md`
-- 最近核验: {today}
-- 稳定性: high
-- 失效条件: 项目放弃仓库内项目记忆治理，或改用其它记忆结构
-- 替代关系: none
-- 内容:
-  - 本项目使用 `CODEX.md`、`.codex/memory/MEMORY.md`、`.codex/memory/YYYY-MM-DD.md` 分层维护项目记忆。
+事实块的格式、来源核验、更正与遗忘合同见 `project-memory-bootstrap-codex protocol`。
+通过受控提案与提交维护本文件；读取历史材料不等于重新核验。
 """
 
-DAY_TEMPLATE = """# Project Memory Events - {today}
+DAY_TEMPLATE = """# 项目记忆初始化事件 - {today}
 
-## 事件 1: 初始化项目记忆
-- 类别: verification
-- 来源: `project-memory-bootstrap-codex init`
-- 验证命令/证据: 初始化命令成功创建或检查项目记忆文件
-- 影响范围: repo
-- 是否可晋升: later
-- 记录:
-  - 已建立 `CODEX.md`、`.codex/memory/MEMORY.md`、当天事件文件的项目记忆结构。
+- 事件：调用 `project-memory-bootstrap-codex init` 时显式指定本日期，建立或检查初始化文件。
+- 范围：仅记录初始化操作，不代表已核验业务事实、注册项目或启用持续维护。
 """
 
 SCRIPT_EMPTY = "- 未发现关键 `*.sh` 脚本。后续发现后按真实脚本正文补充用途、依赖、端口和用法。"
