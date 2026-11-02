@@ -1,16 +1,6 @@
-# Project Long-Term Memory
+# 项目共享记忆
 
-本文件只记录已核验、可跨任务复用、3 天后仍大概率成立的项目级长期事实。
+当前没有受管事实。初始化只建立文件，不证明业务事实、项目身份注册或持续维护已经完成。
 
-## 条目模板
-
-### 示例：项目记忆治理已启用
-- 类型: durable_rule
-- 范围: repo
-- 来源: `CODEX.md`; `.codex/memory/MEMORY.md`
-- 最近核验: YYYY-MM-DD
-- 稳定性: high
-- 失效条件: 项目放弃仓库内项目记忆治理，或改用其它记忆结构
-- 替代关系: none
-- 内容:
-  - 本项目使用 `CODEX.md`、`.codex/memory/MEMORY.md`、`.codex/memory/YYYY-MM-DD.md` 分层维护项目记忆。
+事实块的格式、来源核验、更正与遗忘合同见 `project-memory-bootstrap-codex protocol`。
+通过受控提案与提交维护本文件；读取历史材料不等于重新核验。

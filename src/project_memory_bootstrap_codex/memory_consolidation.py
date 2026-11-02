@@ -1,11 +1,14 @@
-"""Dry-run consolidation reports for project memory governance."""
+"""Consolidation reports and automated cleanup for project memory governance."""
 
 from __future__ import annotations
 
 import datetime as dt
 import hashlib
 import json
+import os
 import re
+import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -20,7 +23,10 @@ from .memory_index import (
 )
 
 REPORTS_RELATIVE_DIR = Path(".codex") / "cache" / "memory-reports"
+ARCHIVE_RELATIVE_DIR = Path(".codex") / "cache" / "memory-archive"
+REPORT_DIR_ENV = "PROJECT_MEMORY_BOOTSTRAP_REPORT_DIR"
 STALE_DAYS = 30
+ARCHIVE_DAY_MEMORY_OLDER_THAN_DAYS = 180
 
 
 @dataclass(frozen=True)
@@ -52,8 +58,103 @@ class ApplyResult:
     messages: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class AgentApplyResult:
+    report: ConsolidationReport
+    applied: tuple[str, ...]
+    skipped: tuple[str, ...]
+    archived: tuple[str, ...]
+    cleaned: tuple[str, ...]
+    messages: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SectionCleanup:
+    rel_path: str
+    removed_titles: tuple[str, ...]
+    archive_path: Path
+    deleted_file: bool = False
+
+
 def reports_dir(root: Path) -> Path:
     return root / REPORTS_RELATIVE_DIR
+
+
+def fallback_reports_dir(root: Path) -> Path:
+    digest = hashlib.sha1(str(root.resolve()).encode("utf-8")).hexdigest()[:12]
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", root.name).strip("-") or "project"
+    return Path(tempfile.gettempdir()) / "project-memory-bootstrap-codex" / f"{slug}-{digest}" / "memory-reports"
+
+
+def archive_dir(root: Path) -> Path:
+    return root / ARCHIVE_RELATIVE_DIR
+
+
+def _resolve_report_dir(root: Path, report_dir: Path | None) -> Path:
+    if report_dir is not None:
+        return _normalize_report_dir(report_dir)
+    env_report_dir = os.environ.get(REPORT_DIR_ENV)
+    if env_report_dir:
+        return _normalize_report_dir(Path(env_report_dir))
+    return reports_dir(root)
+
+
+def _report_fallback_allowed(report_dir: Path | None) -> bool:
+    return report_dir is None and not os.environ.get(REPORT_DIR_ENV)
+
+
+def _normalize_report_dir(report_dir: Path) -> Path:
+    expanded = report_dir.expanduser()
+    return expanded if expanded.is_absolute() else expanded.resolve()
+
+
+def _candidate_report_dirs(root: Path) -> list[Path]:
+    candidates = [reports_dir(root)]
+    env_report_dir = os.environ.get(REPORT_DIR_ENV)
+    if env_report_dir:
+        candidates.append(_normalize_report_dir(Path(env_report_dir)))
+    candidates.append(fallback_reports_dir(root))
+
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        key = candidate.resolve() if candidate.exists() else candidate.absolute()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(candidate)
+    return unique
+
+
+def _build_report(
+    root: Path,
+    timestamp: str,
+    items: tuple[ConsolidationItem, ...],
+    target_dir: Path,
+) -> ConsolidationReport:
+    return ConsolidationReport(
+        root=root,
+        timestamp=timestamp,
+        markdown_path=target_dir / f"{timestamp}-consolidation.md",
+        json_path=target_dir / f"{timestamp}-consolidation.json",
+        items=items,
+    )
+
+
+def _write_report_files(report: ConsolidationReport) -> None:
+    report.markdown_path.parent.mkdir(parents=True, exist_ok=True)
+    _best_effort_chmod(report.markdown_path.parent, 0o700)
+    report.markdown_path.write_text(render_report_markdown(report), encoding="utf-8")
+    _best_effort_chmod(report.markdown_path, 0o600)
+    report.json_path.write_text(render_report_json(report), encoding="utf-8")
+    _best_effort_chmod(report.json_path, 0o600)
+
+
+def _best_effort_chmod(path: Path, mode: int) -> None:
+    try:
+        path.chmod(mode)
+    except OSError:
+        pass
 
 
 def generate_consolidation_report(
@@ -61,26 +162,26 @@ def generate_consolidation_report(
     *,
     now: dt.datetime | None = None,
     write: bool = True,
+    report_dir: Path | None = None,
 ) -> ConsolidationReport:
     root = find_project_root(path)
     current_time = now or dt.datetime.now().replace(microsecond=0)
     timestamp = current_time.strftime("%Y%m%d-%H%M%S")
     items = tuple(_collect_items(root, current_time.date()))
-    target_dir = reports_dir(root)
-    markdown_path = target_dir / f"{timestamp}-consolidation.md"
-    json_path = target_dir / f"{timestamp}-consolidation.json"
-    report = ConsolidationReport(
-        root=root,
-        timestamp=timestamp,
-        markdown_path=markdown_path,
-        json_path=json_path,
-        items=items,
-    )
+    target_dir = _resolve_report_dir(root, report_dir)
+    report = _build_report(root, timestamp, items, target_dir)
 
     if write:
-        target_dir.mkdir(parents=True, exist_ok=True)
-        markdown_path.write_text(render_report_markdown(report), encoding="utf-8")
-        json_path.write_text(render_report_json(report), encoding="utf-8")
+        try:
+            _write_report_files(report)
+        except PermissionError:
+            if not _report_fallback_allowed(report_dir):
+                raise
+            fallback_report = _build_report(root, timestamp, items, fallback_reports_dir(root))
+            if fallback_report.markdown_path == report.markdown_path:
+                raise
+            _write_report_files(fallback_report)
+            report = fallback_report
 
     return report
 
@@ -88,11 +189,17 @@ def generate_consolidation_report(
 def list_reports(path: Path) -> list[ConsolidationReport]:
     root = find_project_root(path)
     reports: list[ConsolidationReport] = []
-    for json_path in sorted(reports_dir(root).glob("*-consolidation.json")):
-        report = _load_report_json(root, json_path)
-        if report is not None:
-            reports.append(report)
-    return reports
+    seen: set[Path] = set()
+    for target_dir in _candidate_report_dirs(root):
+        for json_path in sorted(target_dir.glob("*-consolidation.json")):
+            resolved_path = json_path.resolve()
+            if resolved_path in seen:
+                continue
+            seen.add(resolved_path)
+            report = _load_report_json(root, json_path)
+            if report is not None:
+                reports.append(report)
+    return sorted(reports, key=lambda report: (report.timestamp, str(report.json_path)))
 
 
 def latest_report(path: Path) -> ConsolidationReport:
@@ -140,6 +247,78 @@ def apply_consolidation_report(
             messages.append(f"skipped {item_id}: not found in report")
 
     return ApplyResult(applied=tuple(applied), skipped=tuple(skipped), messages=tuple(messages))
+
+
+def agent_apply_consolidation(
+    path: Path,
+    *,
+    now: dt.datetime | None = None,
+    archive_day_memory_older_than_days: int = ARCHIVE_DAY_MEMORY_OLDER_THAN_DAYS,
+    report_dir: Path | None = None,
+) -> AgentApplyResult:
+    """Generate a fresh report and let the deterministic cleanup agent apply it.
+
+    The agent only performs actions that can be proven from local files:
+    rebuilding the local index, retiring duplicate legacy/worktree memory files,
+    and retiring old day-memory files that have no promotable or conflict events.
+    Retired files are moved into .codex/cache/memory-archive so they disappear
+    from the active memory index but remain recoverable.
+    """
+
+    root = find_project_root(path)
+    current_time = now or dt.datetime.now().replace(microsecond=0)
+    report = generate_consolidation_report(root, now=current_time, write=True, report_dir=report_dir)
+    timestamp = report.timestamp
+    applied: list[str] = []
+    skipped: list[str] = []
+    archived: list[str] = []
+    cleaned: list[str] = []
+    messages: list[str] = [
+        f"agent report: {report.markdown_path}",
+        f"agent json: {report.json_path}",
+    ]
+
+    for item in report.items:
+        if item.kind == "index":
+            rebuild_index(root)
+            applied.append(item.id)
+            messages.append(f"applied {item.id}: rebuilt memory index")
+            continue
+        skipped.append(item.id)
+        messages.append(f"agent reviewed {item.id}: no direct item handler")
+
+    duplicate_paths = _auto_duplicate_archive_paths(root)
+    expired_day_paths = _expired_day_memory_archive_paths(
+        root,
+        current_time.date(),
+        archive_day_memory_older_than_days,
+    )
+    for rel_path in sorted(set(duplicate_paths + expired_day_paths)):
+        archived_path = _archive_active_memory_file(root, rel_path, timestamp)
+        archived.append(rel_path)
+        messages.append(f"archived {rel_path}: {archived_path}")
+
+    section_cleanups = _auto_duplicate_section_cleanups(root, timestamp, excluded_paths=set(archived))
+    for cleanup in section_cleanups:
+        cleaned.extend(f"{cleanup.rel_path}#{title}" for title in cleanup.removed_titles)
+        action = "deleted empty file after section cleanup" if cleanup.deleted_file else "removed duplicate sections"
+        messages.append(
+            f"cleaned {cleanup.rel_path}: {action}; archive: {cleanup.archive_path}; "
+            f"sections: {', '.join(cleanup.removed_titles)}"
+        )
+
+    if archived or cleaned:
+        rebuild_index(root)
+        messages.append("applied archive cleanup: rebuilt memory index")
+
+    return AgentApplyResult(
+        report=report,
+        applied=tuple(applied),
+        skipped=tuple(skipped),
+        archived=tuple(archived),
+        cleaned=tuple(cleaned),
+        messages=tuple(messages),
+    )
 
 
 def render_report_markdown(report: ConsolidationReport) -> str:
@@ -219,11 +398,11 @@ def format_report_list(reports: list[ConsolidationReport]) -> str:
 
 def _collect_items(root: Path, today: dt.date) -> list[ConsolidationItem]:
     items: list[ConsolidationItem] = []
-    status = index_status(root)
+    status = index_status(root, include_runtime=True)
     if not status.is_current:
         items.append(_index_item(status))
 
-    chunks = load_chunks(root)
+    chunks = load_chunks(root, include_runtime=True)
     items.extend(_duplicate_items(chunks))
     items.extend(_stale_items(chunks, today))
     items.extend(_promote_items(chunks))
@@ -286,7 +465,7 @@ def _stale_items(chunks: list[MemoryChunk], today: dt.date) -> list[Consolidatio
     for chunk in chunks:
         if chunk.kind != "long_memory":
             continue
-        match = re.search(r"^\s*-\s*最近核验:\s*(\d{4}-\d{2}-\d{2})\s*$", chunk.text, flags=re.MULTILINE)
+        match = re.search(r"^\s*-\s*最近核验\s*[:：]\s*(\d{4}-\d{2}-\d{2})\s*$", chunk.text, flags=re.MULTILINE)
         if not match:
             continue
         verified = dt.date.fromisoformat(match.group(1))
@@ -314,7 +493,7 @@ def _promote_items(chunks: list[MemoryChunk]) -> list[ConsolidationItem]:
     for chunk in chunks:
         if chunk.kind != "day_memory":
             continue
-        if not re.search(r"^\s*-\s*是否可晋升:\s*yes\s*$", chunk.text, flags=re.MULTILINE | re.IGNORECASE):
+        if not _metadata_marker(chunk.text, "是否可晋升", "yes|是"):
             continue
         items.append(
             ConsolidationItem(
@@ -335,7 +514,7 @@ def _promote_items(chunks: list[MemoryChunk]) -> list[ConsolidationItem]:
 def _conflict_items(chunks: list[MemoryChunk]) -> list[ConsolidationItem]:
     items: list[ConsolidationItem] = []
     for chunk in chunks:
-        if not re.search(r"^\s*-\s*类别:\s*conflict\s*$", chunk.text, flags=re.MULTILINE | re.IGNORECASE):
+        if not _metadata_marker(chunk.text, "类别", "conflict|冲突"):
             continue
         items.append(
             ConsolidationItem(
@@ -417,6 +596,238 @@ def _normalize_chunk_text(text: str) -> str:
     normalized = "\n".join(line.strip() for line in lines if line.strip())
     normalized = re.sub(r"\s+", " ", normalized).strip().lower()
     return normalized
+
+
+def _auto_duplicate_archive_paths(root: Path) -> list[str]:
+    chunks = load_chunks(root, include_runtime=True)
+    chunks_by_path: dict[str, list[MemoryChunk]] = {}
+    paths_by_digest: dict[str, set[str]] = {}
+
+    for chunk in chunks:
+        if chunk.kind not in {"long_memory", "day_memory", "legacy_memory", "project_manual"}:
+            continue
+        normalized = _normalize_chunk_text(chunk.text)
+        if len(normalized) < 30:
+            continue
+        digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()
+        chunks_by_path.setdefault(chunk.path, []).append(chunk)
+        paths_by_digest.setdefault(digest, set()).add(chunk.path)
+
+    candidates: list[str] = []
+    for rel_path, path_chunks in chunks_by_path.items():
+        if not _is_auto_retirable_legacy_path(rel_path):
+            continue
+
+        digests: list[str] = []
+        for chunk in path_chunks:
+            normalized = _normalize_chunk_text(chunk.text)
+            if len(normalized) < 30:
+                continue
+            digests.append(hashlib.sha1(normalized.encode("utf-8")).hexdigest())
+        if not digests:
+            continue
+
+        if all(_has_active_duplicate(rel_path, paths_by_digest[digest]) for digest in digests):
+            candidates.append(rel_path)
+
+    return sorted(set(candidates))
+
+
+def _auto_duplicate_section_cleanups(root: Path, timestamp: str, *, excluded_paths: set[str]) -> list[SectionCleanup]:
+    chunks = load_chunks(root, include_runtime=True)
+    paths_by_digest: dict[str, set[str]] = {}
+    for chunk in chunks:
+        if chunk.kind not in {"long_memory", "day_memory", "legacy_memory", "project_manual"}:
+            continue
+        normalized = _normalize_chunk_text(chunk.text)
+        if len(normalized) < 30:
+            continue
+        digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()
+        paths_by_digest.setdefault(digest, set()).add(chunk.path)
+
+    cleanups: list[SectionCleanup] = []
+    candidate_paths = sorted(
+        {
+            chunk.path
+            for chunk in chunks
+            if _is_auto_retirable_legacy_path(chunk.path) and chunk.path not in excluded_paths
+        }
+    )
+    for rel_path in candidate_paths:
+        source = root / rel_path
+        if not source.is_file():
+            continue
+        text = source.read_text(encoding="utf-8", errors="replace")
+        sections = _split_markdown_sections(text)
+        kept_sections: list[str] = []
+        removed_titles: list[str] = []
+
+        for title, section_text in sections:
+            normalized = _normalize_chunk_text(section_text)
+            if len(normalized) < 30:
+                kept_sections.append(section_text)
+                continue
+            digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()
+            if _has_active_duplicate(rel_path, paths_by_digest.get(digest, set())):
+                removed_titles.append(title)
+                continue
+            kept_sections.append(section_text)
+
+        if not removed_titles:
+            continue
+
+        archive_path = _copy_active_memory_file_to_archive(root, rel_path, timestamp)
+        new_text = "\n\n".join(section.strip() for section in kept_sections if section.strip()).strip()
+        deleted_file = _is_effectively_empty_markdown(new_text)
+        if deleted_file:
+            source.unlink()
+        else:
+            source.write_text(new_text + "\n", encoding="utf-8")
+        cleanups.append(
+            SectionCleanup(
+                rel_path=rel_path,
+                removed_titles=tuple(removed_titles),
+                archive_path=archive_path,
+                deleted_file=deleted_file,
+            )
+        )
+
+    return cleanups
+
+
+def _split_markdown_sections(text: str) -> list[tuple[str, str]]:
+    sections: list[tuple[str, list[str]]] = []
+    current_title = "Document"
+    current_lines: list[str] = []
+
+    for line in text.splitlines():
+        heading = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
+        if heading:
+            if current_lines:
+                sections.append((current_title, current_lines))
+            current_title = heading.group(2).strip()
+            current_lines = [line]
+        else:
+            current_lines.append(line)
+
+    if current_lines:
+        sections.append((current_title, current_lines))
+
+    return [(title, "\n".join(lines).strip()) for title, lines in sections if "\n".join(lines).strip()]
+
+
+def _is_effectively_empty_markdown(text: str) -> bool:
+    body_lines = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not re.match(r"^#{1,6}\s+.+$", line.strip()) and line.strip() != "---"
+    ]
+    return not body_lines
+
+
+def _is_auto_retirable_legacy_path(rel_path: str) -> bool:
+    if rel_path.startswith(".worktrees/") and "/.workbuddy/" in rel_path:
+        return True
+    if rel_path.startswith(".worktrees/") and "/memory/" in f"/{rel_path}":
+        return True
+    return rel_path.startswith((".workbuddy/", ".claude/", ".cursor/"))
+
+
+def _has_active_duplicate(rel_path: str, duplicate_paths: set[str]) -> bool:
+    others = duplicate_paths - {rel_path}
+    if not others:
+        return False
+    if rel_path.startswith(".worktrees/"):
+        return True
+    return any(_is_canonical_memory_path(path) for path in others)
+
+
+def _is_canonical_memory_path(rel_path: str) -> bool:
+    return (
+        rel_path == "CODEX.md"
+        or rel_path == ".codex/memory/MEMORY.md"
+        or bool(re.fullmatch(r"\.codex/memory/\d{4}-\d{2}-\d{2}\.md", rel_path))
+    )
+
+
+def _expired_day_memory_archive_paths(root: Path, today: dt.date, older_than_days: int) -> list[str]:
+    if older_than_days <= 0:
+        return []
+    memory_dir = root / ".codex" / "memory"
+    if not memory_dir.is_dir():
+        return []
+
+    expired: list[str] = []
+    for path in sorted(memory_dir.glob("*.md")):
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}\.md", path.name):
+            continue
+        event_date = dt.date.fromisoformat(path.stem)
+        if (today - event_date).days <= older_than_days:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if _has_promotable_or_conflict_event(text):
+            continue
+        expired.append(path.relative_to(root).as_posix())
+    return expired
+
+
+def _has_promotable_or_conflict_event(text: str) -> bool:
+    return bool(
+        _metadata_marker(text, "是否可晋升", "yes|是")
+        or _metadata_marker(text, "类别", "conflict|冲突")
+    )
+
+
+def _metadata_marker(text: str, field: str, values: str) -> bool:
+    return bool(re.search(rf"^\s*-\s*{re.escape(field)}\s*[:：]\s*(?:{values})(?:\s*$|\s*[（(，,；;])", text, flags=re.MULTILINE | re.IGNORECASE))
+
+
+def _archive_active_memory_file(root: Path, rel_path: str, timestamp: str) -> Path:
+    source = (root / rel_path).resolve()
+    resolved_root = root.resolve()
+    try:
+        source.relative_to(resolved_root)
+    except ValueError as exc:
+        raise ValueError(f"refusing to archive outside project root: {rel_path}") from exc
+    if not source.is_file():
+        raise FileNotFoundError(f"memory file not found: {rel_path}")
+
+    target = archive_dir(root) / timestamp / rel_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    unique_target = _unique_archive_path(target)
+    shutil.move(str(source), str(unique_target))
+    return unique_target
+
+
+def _copy_active_memory_file_to_archive(root: Path, rel_path: str, timestamp: str) -> Path:
+    source = (root / rel_path).resolve()
+    resolved_root = root.resolve()
+    try:
+        source.relative_to(resolved_root)
+    except ValueError as exc:
+        raise ValueError(f"refusing to archive outside project root: {rel_path}") from exc
+    if not source.is_file():
+        raise FileNotFoundError(f"memory file not found: {rel_path}")
+
+    target = archive_dir(root) / timestamp / rel_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    unique_target = _unique_archive_path(target)
+    shutil.copy2(source, unique_target)
+    return unique_target
+
+
+def _unique_archive_path(path: Path) -> Path:
+    if not path.exists():
+        return path
+    stem = path.stem
+    suffix = path.suffix
+    parent = path.parent
+    counter = 2
+    while True:
+        candidate = parent / f"{stem}-{counter}{suffix}"
+        if not candidate.exists():
+            return candidate
+        counter += 1
 
 
 def _normalize_ids(ids: Iterable[str]) -> list[str]:

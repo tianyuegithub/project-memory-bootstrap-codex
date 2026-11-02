@@ -1,101 +1,34 @@
 ---
 name: project-memory-bootstrap-codex
-description: Initialize or refresh project-level auditable memory for Codex repositories. Use when entering an unfamiliar repository, switching projects, a repo lacks CODEX.md, project context is scattered across README/docs/agent files, or Codex should maintain CODEX.md plus .codex/memory/MEMORY.md and .codex/memory/YYYY-MM-DD.md.
+description: Read or maintain auditable shared project memory across coding tools, resolve registered project context, and preserve evidence, lifecycle and publication boundaries. Use for project-memory questions, explicit setup or recovery, and approved ongoing maintenance; ordinary coding does not trigger full initialization or history scans.
 ---
 
-# Project Memory Bootstrap Codex
+# Shared Project Memory
 
-## Goal
+Use the installed CLI as the protocol owner. Read `project-memory-bootstrap-codex protocol --brief` for the short workflow; read `protocol` when writing proposals or diagnosing lifecycle behavior. Do not copy its schema into another handbook.
 
-Create or refresh a repository-local memory layer that complements native Codex `AGENTS.md` and Memories:
+## Read
 
-- `CODEX.md`: first-screen project briefing.
-- `.codex/memory/MEMORY.md`: durable project facts.
-- `.codex/memory/YYYY-MM-DD.md`: day-level event log.
+- Start with the project's AGENTS; use README and current domain owners when relevant. Do not create a second CODEX briefing or load all memory by default.
+- For an enabled shared project, resolve `project-context .`, then query `search-memory`, `get-memory` or `context-memory` as needed. The program checks publication state, source scope and index freshness.
+- Preserve complete conditions, evidence versions and uncertainty. Requirements, observed implementation, historical verification and user decisions are distinct claims.
+- A state-missing/conflict error is not an empty memory result. Report it and continue ordinary work from current authoritative sources; do not substitute old caches.
 
-## Workflow
+## Write
 
-1. Locate the project root.
-   - Prefer `git rev-parse --show-toplevel`.
-   - If the path is not in Git, use the current working directory.
+- Explicit setup or the registered project's accepted ongoing maintenance scope authorizes memory operations. An unregistered project is not silently enrolled; memory authorization never implies business deployment, external publication or cross-project access.
+- Reuse direct verification from the current task. Submit minimal sources with `capture-memory`, a proposal with `propose-memory`, and publish with `commit-memory`. Obtain current fact versions with `inspect-memory` first when revising existing facts.
+- JSON travels through stdin or a controlled file, never through argv. Do not store credentials or hidden reasoning.
+- The task agent owns semantic verification; the deterministic publisher owns identity, version, suppression, serialization and recovery. Missing evidence stays uncertain. Do not invoke another model for every already-verified unchanged fact.
+- Do not directly rewrite governed MEMORY blocks or run legacy cleanup/report commands for registered projects. No new reusable knowledge means a recorded no-change decision, not a new day file.
 
-2. Read high-signal context in this order.
-   - `CODEX.md`
-   - `AGENTS.md`, `CLAUDE.md`, `CURSOR.md`
-   - `README*`, `docs/*`
-   - Build files such as `package.json`, `pyproject.toml`, `pom.xml`, `Makefile`
+## Setup and recovery
 
-3. Discover legacy or agent memory files.
-   - `.codex/memory/*`
-   - `**/MEMORY.md`
-   - `**/memory/*.md`
-   - `.workbuddy/*`, `.claude/*`, `.cursor/*`
+- Initialize missing entry files only within explicit setup/repair scope. `init` creates missing AGENTS, README and MEMORY; it neither verifies facts nor enables ongoing maintenance.
+- Register exact member repositories and workspaces, preserve existing files, then prove the relevant tool's actual loading, query and candidate publication. Configuration alone is not acceptance.
+- Recover current knowledge from authoritative specifications, source and existing evidence. Use historical conversations only for necessary decisions, corrections or missing context; do not fabricate daily logs.
+- A missing persistent state cannot be rebuilt merely from old Markdown, because suppression decisions may be lost. Preserve evidence and use inspected recovery; never silently initialize an empty replacement.
 
-4. Use this source priority.
-   - User-confirmed facts
-   - Live source/config/scripts/tests
-   - Project `CODEX.md`
-   - Project `.codex/memory/MEMORY.md`
-   - Project `.codex/memory/YYYY-MM-DD.md`
-   - Repo docs and agent files
-   - Legacy memory
-   - Global `~/.codex/memories/*`
-   - Inference
+## Boundaries
 
-5. Create or update `CODEX.md` with exactly seven sections.
-   - 项目定位
-   - 模块结构
-   - 关键链路
-   - 运行入口与端口
-   - 脚本索引
-   - 上下文来源优先级
-   - 记忆治理规则
-
-6. Maintain `.codex/memory/MEMORY.md`.
-   - Only promote facts that are verified in this turn, reusable across tasks, and likely still true after 3 days.
-   - Each durable entry must include: 类型, 范围, 来源, 最近核验, 稳定性, 失效条件, 替代关系.
-
-7. Maintain `.codex/memory/YYYY-MM-DD.md`.
-   - Write today first, then decide whether to promote to long-term memory.
-   - Each event must include: 类别, 来源, 验证命令/证据, 影响范围, 是否可晋升.
-
-8. Index shell scripts.
-   - Scan root `*.sh`, `scripts/**/*.sh`, `bin/**/*.sh`, `tools/**/*.sh`, `deploy/**/*.sh`.
-   - Only promote script knowledge after reading the script body or seeing real execution evidence.
-
-9. For runtime reads, prefer indexed lookup before opening full memory files.
-   - Build or refresh the index with `project-memory-bootstrap-codex index-memory .`.
-   - Check freshness with `project-memory-bootstrap-codex memory-status .`.
-   - Search with `project-memory-bootstrap-codex search-memory . "<query>"`.
-   - Fetch one selected chunk with `project-memory-bootstrap-codex get-memory . <id>`.
-   - Generate a bounded context with `project-memory-bootstrap-codex context-memory . "<query>" --max-tokens 800`.
-   - If a search result ID is already known, generate context with `project-memory-bootstrap-codex context-memory . --id <id> --max-tokens 800`.
-   - Treat index results as leads; re-open source files before relying on drift-prone facts.
-
-10. For scheduled memory consolidation, generate a dry-run report first.
-   - Run `project-memory-bootstrap-codex memory-status .`.
-   - Rebuild the local index with `project-memory-bootstrap-codex index-memory .` when missing or stale.
-   - Run `project-memory-bootstrap-codex consolidate-memory . --dry-run`.
-   - Read reports with `project-memory-bootstrap-codex consolidation-report . --latest`.
-   - Only apply explicitly selected safe items with `project-memory-bootstrap-codex consolidate-memory . --apply --from-report latest --only <id> --safe`.
-   - Never let automation delete, overwrite, or resolve durable-memory conflicts without human review.
-
-## CLI Shortcut
-
-If the repository has installed `project-memory-bootstrap-codex`, prefer:
-
-```bash
-project-memory-bootstrap-codex init . --with-agents
-project-memory-bootstrap-codex doctor .
-project-memory-bootstrap-codex index-memory .
-project-memory-bootstrap-codex memory-status .
-project-memory-bootstrap-codex consolidate-memory . --dry-run
-```
-
-## Guardrails
-
-- Do not overwrite existing project memory blindly.
-- Do not copy raw chat transcripts into long-term memory.
-- Do not store secrets, credentials, tokens, or private customer data.
-- Do not commit `.codex/cache/memory-index.sqlite` or `.codex/cache/memory-reports/`; they are local runtime caches.
-- If evidence conflicts, write a `conflict` event to the day file and do not change durable memory until verified.
+Markdown owns published knowledge; the persistent ledger owns processing and suppression; the index is disposable. Native tool memories remain managed by their tool and can supply evidence, not a parallel project truth owner. No automatic Git commit/push, archive, global policy expansion or runtime-data mutation is implied.

@@ -1,0 +1,19 @@
+# Copy this file to:
+#   $CODEX_HOME/automations/<automation_id>/automation.toml
+#
+# Replace placeholders wrapped in {{...}}. This daily job is intentionally
+# lightweight; run consolidation manually or from a separate weekly governance job.
+
+version = 1
+id = "{{automation_id}}"
+kind = "cron"
+name = "{{project_name}} memory status check"
+prompt = "Run `project-memory-bootstrap-codex memory-status . --no-legacy`. If the status is ok, report the status, source file count, indexed chunk count, and stop. If the status is missing or stale, run `project-memory-bootstrap-codex index-memory . --no-legacy`, then rerun `project-memory-bootstrap-codex memory-status . --no-legacy` and report both command summaries. Do not run `consolidate-memory`, do not scan `.runtime/`, `.worktrees/`, or `.codex/cache/memory-archive/`, and do not edit memory files, commit, push, or create pull requests. Writes are limited to the rebuildable index at `.codex/cache/memory-index.sqlite` when reindexing is required."
+status = "ACTIVE"
+rrule = "FREQ=DAILY;BYHOUR={{hour_0_23}};BYMINUTE={{minute_0_59}};BYSECOND=0"
+model = "gpt-5.4-mini"
+reasoning_effort = "low"
+execution_environment = "local"
+cwds = ["{{absolute_project_root}}"]
+created_at = {{epoch_millis}}
+updated_at = {{epoch_millis}}

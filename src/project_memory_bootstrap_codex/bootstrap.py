@@ -3,23 +3,23 @@
 from __future__ import annotations
 
 import datetime as _dt
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from .templates import AGENTS_TEMPLATE, CODEX_TEMPLATE, DAY_TEMPLATE, MEMORY_TEMPLATE, SCRIPT_EMPTY
-
-CODEX_SECTIONS = [
-    "项目定位",
-    "模块结构",
-    "关键链路",
-    "运行入口与端口",
-    "脚本索引",
-    "上下文来源优先级",
-    "记忆治理规则",
-]
+from .errors import MemoryProtocolError
+from .facts import parse_facts
+from .project import resolve_context
+from .templates import AGENTS_TEMPLATE, README_TEMPLATE, DAY_TEMPLATE, MEMORY_TEMPLATE, SCRIPT_EMPTY
 
 SCRIPT_DIRS = ["scripts", "bin", "tools", "deploy"]
+SENSITIVE_VALUE_PATTERNS = [
+    re.compile(r"(?i)\b(password|secret|token|api[_-]?key)\s*[:=]\s*(?!\.\.\.|<|\$|\*)[^\s`'\"<>]{8,}"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{20,}"),
+    re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s:@]+@"),
+]
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,10 @@ class DoctorResult:
 
 def find_project_root(path: Path) -> Path:
     """Return the Git root for path, or the path itself when it is not in Git."""
+
+    context = resolve_context(path)
+    if context is not None:
+        return context.root
 
     resolved = path.expanduser().resolve()
     base = resolved if resolved.is_dir() else resolved.parent
@@ -115,33 +119,37 @@ def init_project(
     *,
     today: str | None = None,
     force: bool = False,
-    with_agents: bool = False,
+    with_agents: bool = True,
 ) -> list[WriteResult]:
     root = find_project_root(path)
+    if (root / ".project-memory.json").exists():
+        if force:
+            raise MemoryProtocolError("GOVERNED_INIT_FORBIDDEN", "Initialization cannot overwrite a registered project's managed files.")
+        if (root / ".codex/memory-state/ledger.sqlite").exists() and not (root / ".codex/memory/MEMORY.md").exists():
+            raise MemoryProtocolError("MEMORY_MISSING", "Published memory is missing; initialization must not replace it with an empty document.")
     date = today_string(today)
     project_name = root.name
-    script_index = render_script_index(root)
 
     results = [
         write_if_needed(
-            root / "CODEX.md",
-            CODEX_TEMPLATE.format(project_name=project_name, script_index=script_index),
+            root / "README.md",
+            README_TEMPLATE.format(project_name=project_name),
             force=force,
             root=root,
         ),
         write_if_needed(
             root / ".codex" / "memory" / "MEMORY.md",
-            MEMORY_TEMPLATE.format(today=date),
-            force=force,
-            root=root,
-        ),
-        write_if_needed(
-            root / ".codex" / "memory" / f"{date}.md",
-            DAY_TEMPLATE.format(today=date),
+            MEMORY_TEMPLATE,
             force=force,
             root=root,
         ),
     ]
+
+    if today is not None:
+        results.append(write_if_needed(
+            root / ".codex" / "memory" / f"{date}.md",
+            DAY_TEMPLATE.format(today=date), force=force, root=root,
+        ))
 
     if with_agents:
         results.append(write_if_needed(root / "AGENTS.md", AGENTS_TEMPLATE, force=force, root=root))
@@ -155,7 +163,8 @@ def doctor(path: Path) -> DoctorResult:
     ok = True
 
     required = [
-        root / "CODEX.md",
+        root / "AGENTS.md",
+        root / "README.md",
         root / ".codex" / "memory" / "MEMORY.md",
     ]
     for item in required:
@@ -165,32 +174,89 @@ def doctor(path: Path) -> DoctorResult:
             ok = False
             messages.append(f"missing: {item.relative_to(root)}")
 
-    codex_path = root / "CODEX.md"
-    if codex_path.exists():
-        text = codex_path.read_text(encoding="utf-8")
-        for section in CODEX_SECTIONS:
-            marker = f"## {section}"
-            if marker in text:
-                messages.append(f"ok: CODEX.md has section {section}")
-            else:
-                ok = False
-                messages.append(f"missing: CODEX.md section {section}")
-
     memory_path = root / ".codex" / "memory" / "MEMORY.md"
     if memory_path.exists():
         text = memory_path.read_text(encoding="utf-8")
-        for field in ["类型", "范围", "来源", "最近核验", "稳定性", "失效条件", "替代关系"]:
-            if f"- {field}:" in text:
-                messages.append(f"ok: MEMORY.md contains metadata field {field}")
-            else:
+        if "<!-- project-memory-fact" in text or "<!-- /project-memory-fact" in text:
+            try:
+                facts = parse_facts(text)
+            except MemoryProtocolError as exc:
                 ok = False
-                messages.append(f"missing: MEMORY.md metadata field {field}")
+                messages.append(f"invalid-facts: {exc}")
+            else:
+                messages.append(f"ok: MEMORY.md validated {len(facts)} managed fact(s)")
+        elif text.strip() and text.strip() != MEMORY_TEMPLATE.strip():
+            messages.append("legacy: MEMORY.md contains unstructured memory; facts need verification")
+        else:
+            messages.append("info: MEMORY.md has no managed facts")
+        stale_dates = _stale_verification_dates(text, today=_dt.date.today())
+        if stale_dates:
+            preview = ", ".join(stale_dates[:10])
+            messages.append(f"warn: legacy 最近核验 older than 30 days (age alone does not invalidate facts): {preview}")
 
-    day_files = sorted((root / ".codex" / "memory").glob("20??-??-??.md"))
-    if day_files:
-        messages.append(f"ok: found {len(day_files)} day memory file(s)")
-    else:
+    sensitive_hits = _sensitive_memory_hits(root)
+    if sensitive_hits:
+        preview = ", ".join(sensitive_hits[:10])
+        suffix = "" if len(sensitive_hits) <= 10 else f", ... {len(sensitive_hits) - 10} more"
+        messages.append(f"warn: possible sensitive values in memory files: {preview}{suffix}")
+
+    tracked_cache = _tracked_codex_cache_files(root)
+    if tracked_cache:
         ok = False
-        messages.append("missing: .codex/memory/YYYY-MM-DD.md")
+        preview = ", ".join(tracked_cache[:10])
+        suffix = "" if len(tracked_cache) <= 10 else f", ... {len(tracked_cache) - 10} more"
+        messages.append(f"tracked-cache: local cache/state files are tracked by git: {preview}{suffix}")
+
+    if (root / ".project-memory.json").exists():
+        from .memory_state import health
+        try:
+            state = health(root)
+            if state["status"] != "ok":
+                ok = False
+            messages.append(f"state: {state['status']}")
+        except MemoryProtocolError as exc:
+            ok = False
+            messages.append(f"state: {exc.code}: {exc}")
 
     return DoctorResult(ok=ok, messages=messages)
+
+
+def _stale_verification_dates(text: str, *, today: _dt.date) -> list[str]:
+    stale: list[str] = []
+    for match in re.finditer(r"^\s*-\s*最近核验\s*[:：]\s*(\d{4}-\d{2}-\d{2})\b", text, flags=re.MULTILINE):
+        try:
+            verified_at = _dt.date.fromisoformat(match.group(1))
+        except ValueError:
+            continue
+        if (today - verified_at).days > 30:
+            stale.append(match.group(1))
+    return stale
+
+
+def _sensitive_memory_hits(root: Path) -> list[str]:
+    memory_dir = root / ".codex" / "memory"
+    if not memory_dir.is_dir():
+        return []
+
+    hits: list[str] = []
+    for path in sorted(memory_dir.glob("*.md")):
+        rel = path.relative_to(root).as_posix()
+        for lineno, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+            for pattern in SENSITIVE_VALUE_PATTERNS:
+                if pattern.search(line):
+                    hits.append(f"{rel}:{lineno}")
+                    break
+    return hits
+
+
+def _tracked_codex_cache_files(root: Path) -> list[str]:
+    try:
+        output = subprocess.check_output(
+            ["git", "ls-files", ".codex/cache", ".codex/memory-state", ".state"],
+            cwd=root,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return []
+    return [line.strip() for line in output.splitlines() if line.strip()]

@@ -1,10 +1,4 @@
-# Project Memory Events - YYYY-MM-DD
+# 项目记忆初始化事件 - {today}
 
-## 事件 1: 初始化项目记忆
-- 类别: verification
-- 来源: `project-memory-bootstrap-codex init`
-- 验证命令/证据: 初始化命令成功创建或检查项目记忆文件
-- 影响范围: repo
-- 是否可晋升: later
-- 记录:
-  - 已建立 `CODEX.md`、`.codex/memory/MEMORY.md`、当天事件文件的项目记忆结构。
+- 事件：调用 `project-memory-bootstrap-codex init` 时显式指定本日期，建立或检查初始化文件。
+- 范围：仅记录初始化操作，不代表已核验业务事实、注册项目或启用持续维护。

@@ -10,3 +10,4 @@ dist/
 *.egg-info/
 .DS_Store
 .codex/cache/
+.codex/memory-state/
